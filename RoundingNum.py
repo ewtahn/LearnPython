@@ -28,7 +28,7 @@ result=raw[:pos_dot]
 print result
 #ENTER CODE BELOW HERE
 #EN
-
+#test
 
 
 
