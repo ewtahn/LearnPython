@@ -1,0 +1,4 @@
+<ProDir          =         D:/SNR/PCTEST_SSC/mboard/                             
+<MacroFileLoc    =         D:/SNR/PCTEST_SSC/mboard/WB8268PCPU/Board.h   
+<MacroSW_taghead =         <MacroSW                                                       
+<MacroSW_tagtail =         MacroSW>                                                      
