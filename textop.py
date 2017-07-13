@@ -1,23 +1,26 @@
 class CopyAddmacro:
-    def __init__(self,binarysw,fileName,tag01,unitNum=16,ReplaceDict = {'U01':'U', '单元01':'单元'}):
+    def __init__(self,binarysw,tag01,unitNum=16,ReplaceDict = {'_U01':'_U', '单元01':'单元', '链路01':'链路'}):
         self.para=self.readFile('Cfg.txt')
         self.MacroFileLoc=self.readpara(self.para,'<MacroFileLoc')
         if(binarysw!=None):
-            self.BiuldMacroSW=1
+            bWriteMacro=1
             self.binarysw=binarysw
         else:
-            self.BiuldMacroSW=0
-        self.fileName=fileName
-        ProDir=self.readpara(self.para,'<ProDir')
-        self.fileName=ProDir+self.fileName
+            bWriteMacro=0
+
+
 
 
         self.tag01=tag01
         self.unitNum=unitNum
         self.ReplaceDict=ReplaceDict
 
+        if(bWriteMacro==1):
+            self.writeMacro()
     def readFile(self,fileName):
         file = open(fileName,'r')                  #打开文件
+        if(file==-1):
+            return
         content=file.read()                    #将文件读进内存
         file.close()                               #关闭文件
         return content
@@ -80,7 +83,8 @@ class CopyAddmacro:
         self.findBound(content,self.tag01,bound,'',chnlist)
         template=self.readpara(self.para,'<MacroUnitEnaTemp')
         state=self.findBound(content,template,bound,'',chnlist)
-        print(chnlist)
+        print('单元开关情况,注意与组件开关对比是否匹配，因为单元开关只增不减:')
+        print(chnlist[1:self.unitNum+1])
         if (state==-1):                                   #当模版项不存在时(只对宏定义开关有用)
             taghead=self.readpara(self.para,'<MacroSW_UnitEna')
             #tagtail=self.readpara(self.para,'<MacroSW_tagtail')    
@@ -103,38 +107,13 @@ class CopyAddmacro:
             temp=self.replacedict(temp,tempNo)
             if(chnlist[i]):
                 addstring+=temp+'\n'
-        print(addstring)
-        print('生成MacroUnitEna，注意是根据binarysw生成，但之增不减')
+
+        #print('生成MacroUnitEna，注意是根据binarysw生成，但只增不减')
         newstring=content[:bound['head']]+addstring+content[bound['end']:]     #
 
         file = open(self.MacroFileLoc,'w')
         file.write(newstring)
         file.close()
-
-
-
-
-        #for i in range(1, self.unitNum+1):
-        #    tempNo=str(i)
-        #    tempNo=tempNo.zfill(2)
-        #    temp=string.find('_U'+tempNo+'_')   
-        #    if(temp!=-1):
-        #        chnlist[i]=1
-  #
-        #addstring=''
-        #for i in range(1, self.unitNum+1):
-        #    tempNo=str(i)
-        #    tempNo=tempNo.zfill(2)
-        #    temp='#define '+self.tag01 
-        #    temp=self.replacedict(temp,tempNo)
-        #    if(self.binarysw&(1<<(i-1))):
-        #        addstring+=temp+'\n'
-#
-        #newstring=content[:bound['head']]+addstring+content[bound['end']:]     #
-#
-        #file = open(self.MacroFileLoc,'w')
-        #file.write(newstring)
-        #file.close()
 
     def biuldMacroSW(self,content):                     #根据binarysw填宏定义
         bound = {'head':0,'end':0}
@@ -162,14 +141,16 @@ class CopyAddmacro:
             temp=self.replacedict(temp,tempNo)
             if(self.binarysw&(1<<(i-1))):
                 addstring+=temp+'\n'
-
+        print(self.tag01+'类组件宏开关:\n'+addstring)
         newstring=content[:bound['head']]+addstring+content[bound['end']:]     #
 
         file = open(self.MacroFileLoc,'w')
         file.write(newstring)
         file.close()
 
-    def copyaddFullDef(self,content,fileName):
+    def copyaddFullDef(self,contentorg,fileName,lastpos):
+        content=contentorg[lastpos['end']:]                 #这次只处理上次没处理到的部分
+
         bodyhead=content.find(self.tag01)                   #找到待复制的头
         bodyhead=content[:bodyhead].rfind('#ifdef')         #找到待复制的头ifdef位置
         bodyend=self.findend(content[bodyhead:],'#endif')   #找到待复制的尾endif\n的下一个位置
@@ -186,19 +167,27 @@ class CopyAddmacro:
             insrtbody=self.replacedict(tag01body,tempNo)    #替换文本
             addstring+=insrtbody                            #新的插入内容
 
-        newstring=content[:bound['head']]+addstring+content[bound['end']:]     #
+        newstring=contentorg[:lastpos['end']]+content[:bound['head']]+addstring+content[bound['end']:]     #
+        lastpos['end']=len(contentorg[:lastpos['end']]+content[:bound['head']]+addstring)
         #print(content[bound['end']:])
         file = open(fileName,'w')
         file.write(newstring)
         file.close()    
 
-    def do(self):
-        content=self.readFile(self.fileName+'.c')
-        self.copyaddFullDef(content,self.fileName+'.c')
-        content=self.readFile(self.fileName+'.h')
-        self.copyaddFullDef(content,self.fileName+'.h')
-        if(self.BiuldMacroSW==1):
-            content=self.readFile(self.MacroFileLoc)
-            self.biuldMacroSW(content)
-            content=self.readFile(self.MacroFileLoc)
-            self.biuldUnitMacro(content)
+    def writeMacro(self):
+        content=self.readFile(self.MacroFileLoc)
+        self.biuldMacroSW(content)
+        content=self.readFile(self.MacroFileLoc)
+        self.biuldUnitMacro(content)
+
+    def writeFile(self,fileName):
+        lastpos={'end':0}
+        ProDir=self.readpara(self.para,'<ProDir')
+        fileName=ProDir+fileName
+        content=self.readFile(fileName)
+        multiTimes=content.count(self.tag01)
+        for i in range(1,multiTimes+1):         #一个文件中有多处需要替换
+            content=self.readFile(fileName)
+            self.copyaddFullDef(content,fileName,lastpos)
+        #content=self.readFile(fileName+'.h')
+        #self.copyaddFullDef(content,fileName+'.h')
